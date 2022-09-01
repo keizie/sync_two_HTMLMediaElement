@@ -31,8 +31,8 @@ app.get('/yt2', async (req, res) => {
     })
     console.log(`[${new Date()}] [3/3] choose formats: ${id}`)
     const data = {
-        audio: formatsA.at(0)?.url ?? '',
-        video: formatsV.at(0)?.url ?? '',
+        audio: formatsA.at(1)?.url ?? '',
+        video: formatsV.at(1)?.url ?? '',
     };
     // console.log(data);
     cache.put(cacheKey, data, 20 * 1e3)
