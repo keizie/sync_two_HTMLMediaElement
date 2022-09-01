@@ -39,6 +39,7 @@ app.get('/yt2', async (req, res) => {
     return res.json(data)
   } catch (e) {
     console.log('['+id+'] exception occured -- ', e.message)
+    console.error(e);
     return res.json({ url: null })
   }
 })
