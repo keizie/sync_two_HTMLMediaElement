@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+        #video-area {
+            display: block;
+        }
+
+        #video, #single {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        #audio {
+            width: 100%;
+            object-fit: contain;
+        }
+
+        #cases span:hover {
+            outline: 3px dashed red;
+        }
+    </style>
+</head>
+
+<body>
+    <div>
+        <ul id="cases">
+            <li>싱크 민감 케이스
+                <span>https://www.youtube.com/watch?v=QJ3kOmzsIjc</span>
+                <span>https://www.twitch.tv/atk/clip/CloudySullenClintmullinsKreygasm</span>
+            </li>
+            <li>짧은 영상 케이스
+                <span>https://www.youtube.com/watch?v=tz3cC1LE_wM</span>
+                <span>https://www.twitch.tv/junpeifrance/clip/ChillyFunnyAlfalfaTakeNRG</span>
+            </li>
+            <li>긴 영상 케이스
+                <span>https://www.youtube.com/watch?v=pS550L3xlZE</span>
+            </li>
+            <li>복잡 영상 케이스
+                <span>https://www.youtube.com/watch?v=-jEXWjoW4lc</span>
+            </li>
+        </ul>
+
+        <button id="play" disabled data-disabled="2">play/stop</button>
+        <button id="random" disabled>random start</button>
+        <ul>
+            <li>
+                video: <span id="video-time"></span>
+            </li>
+            <li>
+                audio: <span id="audio-time"></span>
+            </li>
+        </ul>
+    </div>
+    <article id="video-area">
+        <video id="video" playsinline webkit-playsinline controls></video>
+        <audio id="audio" playsinline webkit-playsinline controls></audio>
+        <hr>
+        아래는 기존 resolver audioandvideo 통합파일
+        <video id="single" playsinline webkit-playsinline controls></video>
+    </article>
+    <script>
+        const $video = document.getElementById('video');
+        const $audio = document.getElementById('audio');
+        const $single = document.getElementById('single');
+
+        (function ($video, $audio, $single) {
+            // 로드
+            const loader = (ytId) => {
+                fetch(`https://resolver.cf.keizie.net/yt2?id=${ytId}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        $audio.setAttribute('src', data.audio);
+                        $audio.setAttribute('data-disabled', 2);
+                        $audio.setAttribute('disabled', true);
+                        $video.setAttribute('src', data.video);
+                        $video.setAttribute('data-disabled', 2);
+                        $video.setAttribute('disabled', true);
+                    });
+                fetch(`https://resolver.mytwip.net/media/youtube/${ytId}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        $single.setAttribute('src', data.link[0]);
+                    });
+            }
+            document.querySelectorAll('#cases span').forEach((el) => {
+                el.addEventListener('click', () => {
+                    const matched = el.textContent.match(/(youtube|twitch).+[=/]([^=/]+)$/);
+                    console.log(matched);
+                    if (matched[1] === 'youtube') {
+                        loader(matched[2]);
+                    }
+                });
+            });
+
+            $video.addEventListener('canplay', () => {
+                $play.dataset.disabled--;
+                if ($play.dataset.disabled == 0) {
+                    $play.removeAttribute('disabled');
+                    $random.removeAttribute('disabled');
+                }
+            })
+            $audio.addEventListener('canplay', () => {
+                $play.dataset.disabled--;
+                if ($play.dataset.disabled == 0) {
+                    $play.removeAttribute('disabled');
+                    $random.removeAttribute('disabled');
+                }
+            })
+
+            // 재생 버튼
+            const $play = document.getElementById('play');
+            const $random = document.getElementById('random');
+            $play.addEventListener('click', () => {
+                if ($video.readyState > 0) {
+                    if ($video.paused) {
+                        $video.play();
+                    } else {
+                        $video.pause();
+                    }
+                }
+            });
+            $random.addEventListener('click', () => {
+                if ($video.readyState > 0) {
+                    $video.currentTime = Math.random() * $video.duration;
+                    $video.play();
+                }
+            });
+
+            // 재생 상태 연동
+            let audioTimer = null; // play, pause 경합 방지
+            $video.addEventListener('play', () => {
+                // 재생
+                audioTimer && clearTimeout(audioTimer);
+                audioTimer = setTimeout(() => $audio.play(), 100)
+            });
+            $video.addEventListener('pause', () => {
+                // 멈춤
+                audioTimer && clearTimeout(audioTimer);
+                audioTimer = setTimeout(() => $audio.pause(), 100)
+            });
+            $video.addEventListener('waiting', () => {
+                // 로딩중
+                audioTimer && clearTimeout(audioTimer);
+                audioTimer = setTimeout(() => $audio.pause(), 100)
+            });
+            let video_seeked = false;
+            $video.addEventListener('seeked', (event) => {
+                // 시간 변경
+                console.log('seeked');
+                video_seeked = true;
+                $audio.currentTime = $video.currentTime;
+            });
+            $video.addEventListener('canplaythrough', () => {
+                // 로딩중 끝나고 재생가능
+                if (video_seeked) {
+                    video_seeked = false;
+                    if (!$video.paused) {
+                        audioTimer && clearTimeout(audioTimer);
+                        audioTimer = setTimeout(() => $audio.play(), 100)
+                    }
+                }
+            })
+
+            // 재생시각 표시
+            const $videoTime = document.getElementById('video-time');
+            const $audioTime = document.getElementById('audio-time');
+            const timeFormat = (secs) => {
+                const hours = String(Math.floor(secs / 3600));
+                const minutes = String(Math.floor((secs % 3600) / 60));
+                const seconds = String(Math.floor(secs % 60));
+                const fraction = String(secs % 1).substring(2, 8);
+                return `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}:${seconds.padStart(2, '0')}.${fraction}`;
+            };
+            $video.addEventListener('timeupdate', t => {
+                $videoTime.innerText = timeFormat($video.currentTime);
+                if ($video.currentTime != $audio.currentTime) {
+                    $audio.currentTime = $video.currentTime;
+                }
+            })
+            $audio.addEventListener('timeupdate', t => {
+                $audioTime.innerText = timeFormat($audio.currentTime);
+            })
+        }($video, $audio, $single));
+    </script>
+</body>
+
+</html>
